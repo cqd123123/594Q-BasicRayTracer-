@@ -1,0 +1,213 @@
+#include "BVH.h"
+#include <cassert>
+#include <cstdlib>
+
+bool Scenes::Intersect1(Ray& ray, Intersect& iset) const
+{
+
+	bool res = bvh->Intersect1(ray, iset);
+	return res;
+}
+
+struct IngInters{
+	Gemometry* geom;
+	float      dist;
+};
+struct {
+	bool operator()(IngInters a, IngInters b)
+	{   
+		return a.dist < b.dist;
+	}   
+} cmpIng;
+//std::sort(s.begin(), s.end(), customLess);
+
+void Scenes::ComputeShadowRay(Ray& ShadowRay, Vector3f& ShadowFactor, float& thit, Vector3f& hitnorm) const
+{
+	MaterialIO* material;
+	std::vector<Gemometry*>& geoms = bvh->geoms;
+	
+	std::vector<IngInters> intersectGeoms;
+	
+	float hhit = 0.f;
+	for(int i=0;i<geoms.size();i++)
+	{
+		if(geoms[i]->Intersect(ShadowRay,&hhit,hitnorm))
+		{
+			material = geoms[i]->GetMaterial();
+			float tpancy = material->ktran;
+			if(tpancy == 0.f ) {ShadowFactor.setZero(); thit = hhit;return;}
+			IngInters ingI;
+			ingI.geom = geoms[i];
+			ingI.dist = hhit;
+			intersectGeoms.push_back(ingI);
+		}
+	}
+	thit = hhit;
+	//sort the intersected geom
+	int intGoms = intersectGeoms.size();
+	std::sort(intersectGeoms.begin(),intersectGeoms.end(), cmpIng);
+
+	//composite the color
+	for(int i=0;i<intGoms;i++)
+	{
+		material =intersectGeoms[i].geom->GetMaterial();
+		float tpancy = material->ktran;
+		assert(tpancy <1.0f);
+		Vector3f Ndifcol;
+		PointToVector3f(material->diffColor, Ndifcol);
+		if(Ndifcol.norm() != 0.f)
+		{
+			Ndifcol = Ndifcol / max(max(Ndifcol(0), Ndifcol(1)), Ndifcol(2));
+		}
+		ShadowFactor = comp_mult(ShadowFactor, tpancy * Ndifcol);
+	}
+}
+
+bool BVH_Node::Intersect1(Ray& ray, Intersect& iset ) const
+{
+	if(!has_child)
+	{
+		float thit;
+		Vector3f hitNormal;
+		bool Intersect = false;
+		float bthit0, bthit1;
+		//first test against bb
+
+		if(!box.Intersect(ray,&bthit0, &bthit1)) return false;
+
+		for(int k=0;k<geoms.size();k++)
+		{
+			Gemometry* _geom = geoms[k];
+			if(_geom->Intersect(ray,&thit, hitNormal))
+			{
+				Intersect = true;
+				iset.geoms = _geom;
+				iset.HitPos = ray.position(thit);
+				iset.SufNormal = hitNormal;
+				ray.tmax = thit;
+			}
+		}
+		return Intersect;
+	}
+}
+ BVH_Node* RecusiveBuild( std::vector<BVH_Prim*>& buildarr,const int start, const int end, int* totalNodes)
+ {
+	 int mid,dim;
+	 int TotalElm = end - start;
+	 BVH_Node* newNode = NULL;
+	 BVH_Node* lNode   = NULL;
+	 BVH_Node* rNode   = NULL;
+	 //spit the build arr
+	 //compute the bounding box for all primitives
+	 BBox totoalBox;
+	 for(int i=start; i<end; i++)
+	 {
+		BVH_Prim* prim = buildarr[i];
+		totoalBox = Union(totoalBox, prim->geom->box);
+	 }
+	 //get split axis
+	 dim = totoalBox.MaxExtent();
+	 //put the primitives into bucket
+	 float dimleng = (totoalBox.Boxmax - totoalBox.Boxmin)(dim);
+	 float dimS    = (totoalBox.Boxmin)(dim);
+	 float dimE    = (totoalBox.Boxmax)(dim);
+		 
+	 const int numBucket = 12;
+	 BVH_bucket bucket[numBucket];
+	 //init bucket
+	 for(int i=start;i<end; i++)
+	 {
+		 BVH_Prim* prim = buildarr[i];
+		 float centdim  = prim->centro[dim];
+		 int b = (centdim - dimS) / dimleng * numBucket;
+		 if(b == numBucket) b = numBucket -1;
+		 assert(b>=0 && b<numBucket);
+		 //put stuff inside bucket
+		 bucket[b].count ++;
+		 bucket[b].box = Union(bucket[b].box, prim->geom->box);
+	 }
+	 float cosbuck [numBucket-1];
+	 //calculate along bucket bvd
+	 for(int i=0;i<numBucket -1;i++)
+	 {
+			 BBox b0, b1;
+			 int count0 = 0, count1 = 0;
+			 for(int j=0;j<=i;j++)
+			 {
+				 b0 = Union(b0, bucket[j].box);
+				 count0 += bucket[j].count;
+			 }
+			 for(int j = i+1;j<=numBucket -1;j++)
+			 {
+				 b1 = Union(b1, bucket[j].box);
+				 count1 += bucket[j].count;
+			 }
+			 //calculate const
+			 cosbuck[i] = .125f + (count0*b0.SurfaceArea() + count1*b1.SurfaceArea()) /
+				 totoalBox.SurfaceArea();
+		 }
+
+		 //find minimal cut axis
+		 int MinSplitBox = 0;
+		 float CosMin = cosbuck[0];
+		 for(int i=0;i<numBucket - 1;i++)
+		 {
+			 if(cosbuck[i] < CosMin)
+			 {
+				 CosMin = cosbuck[i];
+				 MinSplitBox = i;
+			 }
+		 }
+		 if(CosMin < TotalElm || TotalElm > 10)
+		 {
+			 //split and recursive build
+			 std::vector<BVH_Prim*> FArr;
+			 std::vector<BVH_Prim*> BArr;
+			// newArr.resize(end - start);
+			 for(int i=start;i<end;i++)
+			 {
+				 BVH_Prim* prim = buildarr[i];
+				 float centdim  = prim->centro[dim];
+				 int b = (centdim - dimS) / dimleng * numBucket;
+				 if(b == numBucket) b = numBucket -1;
+				 assert(b>=0 && b<numBucket);
+				 if(b <= MinSplitBox)
+					 FArr.push_back(prim);
+				 else BArr.push_back(prim);
+			 }
+			 int Fsize = FArr.size();
+			 int Bsize = BArr.size();
+			 assert((Fsize + Bsize) == (end - start));
+			 //reorder
+			 for(int i = start; i< start + Fsize ; i++)
+			 {
+				 buildarr[i] = FArr[i - start];
+			 }
+			 for(int i = start + Fsize; i<end;i++)
+			 {
+				 buildarr[i] = BArr[i - start - Fsize];
+			 }
+
+			 int midSpI = start + FArr.size();
+
+			 //build Left
+			 lNode = RecusiveBuild(buildarr, start, midSpI, totalNodes);
+			 rNode = RecusiveBuild(buildarr, midSpI, end, totalNodes);
+			 newNode = new BVH_Node();
+			 newNode->left = lNode;
+			 newNode->right = rNode;
+			 newNode->has_child = true;
+			 newNode->box = Union(lNode->box, rNode->box);
+			 return newNode;
+		 }
+		 else
+		 {
+			 newNode = new BVH_Node();
+			 newNode->left = NULL;
+			 newNode->right = NULL;
+			 newNode->has_child = false;
+
+			 return newNode;
+		 }
+	// }
+ }

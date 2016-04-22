@@ -1,0 +1,108 @@
+spot_light
+{
+  position 0 10.0 0
+  direction 0 -1.0 0
+  color 2 2 2
+  dropOffRate 0.5
+  cutOffAngle 0.3
+}
+
+
+
+sphere {
+  name NULL
+  numMaterials 1
+  material {
+    diffColor 1.0 1.0 1.0
+    ambColor 0.2 0.2 0.2
+    specColor 0 0 0
+    emisColor 0 0 0
+    shininess 0.3
+    ktran 0
+  }
+  origin 0 0 0
+  radius 1.5
+  xaxis 1 0 0
+  xlength 1.5
+  yaxis 0 1 0
+  ylength 1.5
+  zaxis 0 0 1
+  zlength 1.5
+}
+
+poly_set {
+  name floor
+  numMaterials 1
+  material {
+    diffColor 1 1 1
+    ambColor 0.2 0.2 0.2
+    specColor 0 0 0
+    emisColor 0 0 0
+    shininess 0.5
+    ktran 0
+  }
+  type POLYSET_TRI_MESH
+  normType PER_FACE_NORMAL
+  materialBinding PER_OBJECT_MATERIAL
+  hasTextureCoords FALSE
+  rowSize 0
+  numPolys 2
+  
+  poly {
+    numVertices 3
+    pos -10 -5 -10
+    pos -10 -5 10
+    pos 10 -5 -10
+  }
+  poly {
+    numVertices 3
+    pos -10 -5 10
+    pos 10 -5 10
+    pos 10 -5 -10
+  }
+}
+
+
+
+sphere {
+  name NULL
+  numMaterials 1
+  material {
+    diffColor 1.0 1.0 1.0
+    ambColor 0.2 0.2 0.2
+    specColor 0 0 0
+    emisColor 0 0 0
+    shininess 0.5
+    ktran 0
+  }
+  origin 0 -2 0
+  radius 1.5
+  xaxis 1 0 0
+  xlength 1.5
+  yaxis 0 1 0
+  ylength 1.5
+  zaxis 0 0 1
+  zlength 1.5
+}
+
+
+sphere {
+  name NULL
+  numMaterials 1
+  material {
+    diffColor 1.0 1.0 1.0
+    ambColor 0.0 0.0 0.0
+    specColor 0 0 0
+    emisColor 0 0 0
+    shininess 0.4
+    ktran 0
+  }
+  origin -2 1 -3
+  radius 1
+  xaxis 1 0 0
+  xlength 1
+  yaxis 0 1 0
+  ylength 1
+  zaxis 0 0 1
+  zlength 1
+}
